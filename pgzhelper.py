@@ -46,7 +46,6 @@ class Actor(Actor):
         self._animate_counter = 0
         self.fps = 5
         self.direction = 0
-        self.rgba = [150, 150, 150, 255]
         super().__init__(image, pos, anchor, **kwargs)
 
     def distance_to(self, actor):
@@ -182,6 +181,8 @@ class Actor(Actor):
         self._orig_surf = self._surf = loaders.images.load(image)
         self._update_pos()
         self._transform_surf()
+        self._base_rgba = self._rgba = self._get_base_rgba()
+        # self._get_hsva()
 
     def _transform_surf(self):
         self._surf = self._orig_surf
@@ -320,22 +321,48 @@ class Actor(Actor):
     def get_rect(self):
         return self._rect
 
+    def _get_base_rgba(self):
+        _base_rgba = self._surf.get_at((self._surf.get_width() // 2, self._surf.get_height() // 2))
+        return list(_base_rgba)
+
     def reset_effects(self, ):
-        self._surf = self._orig_surf
         self._transform_surf()
 
-    def set_color_effect(self, r, g, b):
-        self.rgba = [r, g, b, self.rgba[3]]
-        self._surf.fill(tuple(self.rgba), None, pygame.BLEND_RGBA_MULT)
+    @property
+    def rgb(self):
+        return self._rgba[0:3]
 
-    def change_color_effect(self, r, g, b):
-        self.rgba += [r, g, b, 0]
-        self._surf.fill(tuple(self.rgba), None, pygame.BLEND_RGBA_MULT)
+    @rgb.setter
+    def rgb(self, _rgb: list):
+        self.reset_effects()
+        r, g, b = _rgb
+        self._rgba = pygame.Color([r, g, b, self._base_rgba[3]])
+        print('[self._rgba] {}'.format(self._rgba))
+        self._surf.fill(self._rgba, None, pygame.BLEND_RGBA_MULT)
 
-    def set_ghost_effect(self, a):
-        self.rgba[3] = a
-        self._surf.fill(tuple(self.rgba), None, pygame.BLEND_RGBA_MULT)
+    def change_rgb(self, r, g, b):
+        self._rgba += [r, g, b, self._base_rgba[3]]
+        self._rgba = pygame.Color([r, g, b, self._base_rgba[3]])
+        self._surf.fill(self._rgba, None, pygame.BLEND_RGBA_MULT)
 
-    def change_ghost_effect(self, a):
-        self.rgba[3] += a
-        self._surf.fill(tuple(self.rgba), None, pygame.BLEND_RGBA_MULT)
+    @property
+    def opacity(self):
+        return self._rgba[3]
+
+    @opacity.setter
+    def opacity(self, a: int):
+        self.reset_effects()
+        self._rgba[3] = a
+        self._surf.fill(tuple(self._rgba), None, pygame.BLEND_RGBA_MULT)
+
+    def change_opacity_by(self, a: int):
+        self.reset_effects()
+        _sum = self._rgba[3] + a
+        if 0 < _sum < 255:
+            self._rgba[3] += a
+        elif _sum <= 0:
+            self._rgba[3] = 0
+        elif _sum >= 255:
+            self._rgba[3] = 255
+        self._surf.fill(tuple(self._rgba), None, pygame.BLEND_RGBA_MULT)
+        print('[self._rgba] {}'.format(self._rgba))

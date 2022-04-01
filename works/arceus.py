@@ -1,6 +1,6 @@
+import pgzrun
 import random
 from pgzhelper import *
-import pygame
 
 TITLE = 'clone'
 # width:幅, wide:幅がある
@@ -9,12 +9,13 @@ WIDTH = 800
 HEIGHT = 600
 # bg : background 背景
 bg = Actor('arceus_bg')
+bg.is_sound_end = False
 
 arceus = Actor('arceus', (100, 300))
 arceus.is_shootable = True
-arceus_image = pygame.image.load('images/arceus.png')
-arceus_image.convert_alpha()
-colored_arceus = arceus_image.copy()
+arceus.vx = arceus.vy = 5
+arceus.is_cleared = False
+arceus.is_over = False
 
 comets = []
 power_balls = []
@@ -32,6 +33,10 @@ enemies = [palkia, dialga]
 
 textbox_pos = Rect(600, 0, 150, 80)
 
+game_clear = Actor('game_clear', (WIDTH // 2, -100))
+game_over = Actor('game_over', (WIDTH // 2, HEIGHT // 2))
+game_over.opacity = 0
+
 
 def draw():
     bg.draw()
@@ -43,27 +48,44 @@ def draw():
         comet.draw()
     for power_ball in power_balls:
         power_ball.draw()
+    game_clear.draw()
+    game_over.draw()
 
 
 def move_arceus():
     if keyboard.w:
-        arceus.y -= 10
+        arceus.y -= arceus.vy
         if arceus.y <= 0:
-            arceus.y += 10
+            arceus.y += arceus.vy
     elif keyboard.s:
-        arceus.y += 10
+        arceus.y += arceus.vy
         if arceus.y >= HEIGHT:
-            arceus.y -= 10
+            arceus.y -= arceus.vy
     if keyboard.d:
-        arceus.x += 10
+        arceus.x += arceus.vx
         arceus.flip_x = False
         if arceus.x >= WIDTH:
-            arceus.x -= 10
+            arceus.x -= arceus.vx
     elif keyboard.a:
-        arceus.x -= 10
+        arceus.x -= arceus.vx
         arceus.flip_x = True
         if arceus.x <= 0:
-            arceus.x += 10
+            arceus.x += arceus.vx
+
+    if keyboard.r:
+        arceus.reset_effects()
+    elif keyboard.t:
+        arceus.rgb = [255, 0, 0]
+    elif keyboard.y:
+        arceus.rgb = [0, 0, 250]
+    elif keyboard.u:
+        arceus.opacity = 50
+    elif keyboard.i:
+        arceus.opacity = 100
+    elif keyboard.j:
+        arceus.change_opacity_by(10)
+    elif keyboard.k:
+        arceus.change_opacity_by(-10)
 
 
 def set_shootable():
@@ -78,27 +100,37 @@ def shoot_comet():
         comet.scale = 0.5  # change size
         comet.y = arceus.y
         if arceus.flip_x:
-            comet.x = arceus.x - 100
+            comet.x = arceus.x
             comet.flip_x = True
         else:
-            comet.x = arceus.x + 100
+            comet.x = arceus.x
             comet.flip_x = False
         comets.append(comet)
         clock.schedule_unique(set_shootable, sounds.shoot.get_length())
 
 
+def damage_enemy(comet):
+    for enemy in enemies:
+        if enemy.colliderect(comet):
+            enemy.hp -= 5
+            comets.remove(comet)
+            if enemy.hp <= 0:
+                enemies.remove(enemy)
+                enemy.scale = 0
+                enemy.hp = 0
+
+
 def move_comet():
     for comet in comets:
-        if arceus.flip_x:
-            comet.flip_x = True
+        if comet.flip_x:
             comet.x -= 10
             if comet.x <= 50:
                 comets.remove(comet)
         else:
-            comet.flip_x = False
             comet.x += 10
             if comet.x >= 700:
                 comets.remove(comet)
+        damage_enemy(comet)
 
 
 def shoot_power_ball():
@@ -111,13 +143,6 @@ def shoot_power_ball():
 def move_power_ball():
     for power_ball in power_balls:
         power_ball.move_towards(palkia, 3)
-
-        if keyboard.r:
-            power_ball.reset_effects()
-        elif keyboard.t:
-            power_ball.set_color_effect(255, 0, 0)
-        elif keyboard.y:
-            power_ball.change_ghost_effect(-10)
 
         if power_ball.colliderect(palkia):
             power_balls.remove(power_ball)
@@ -140,18 +165,32 @@ def move_enemy(enemy):
     animate(enemy, duration=1, pos=(enemy.goal_x, enemy.goal_y))
 
 
-def damage_enemy(enemy):
-    for comet in comets:
-        if enemy.colliderect(comet):
-            enemy.hp -= 5
-            comets.remove(comet)
-            if enemy.hp <= 0:
-                enemies.remove(enemy)
-                enemy.scale = 0
+def _damage_animation(enemy):
+    for i in range(60):
+        enemy.rgb = [200, 200, 200]
+        enemy.reset_effects()
 
 
-def game_over(enemy):
-    pass
+def _is_sound_end():
+    bg.is_sound_end = True
+    exit()
+
+
+def check_game_clear():
+    if len(enemies) == 0 and not bg.is_sound_end and not arceus.is_cleared:
+        arceus.is_cleared = True
+        sounds.clear.play()
+        animate(game_clear, duration=1, pos=(WIDTH // 2, HEIGHT // 2))
+        clock.schedule_unique(_is_sound_end, sounds.clear.get_length())
+
+
+def check_game_over(enemy):
+    if arceus.colliderect(enemy) and not bg.is_sound_end and not arceus.is_over:
+        arceus.is_over = True
+        sounds.bell_toll.play()
+        clock.schedule_unique(_is_sound_end, sounds.bell_toll.get_length())
+    if not bg.is_sound_end and arceus.is_over:
+        game_over.change_opacity_by(3)
 
 
 def update():
@@ -165,4 +204,6 @@ def update():
 
     for enemy in enemies:
         move_enemy(enemy)
-        damage_enemy(enemy)
+        check_game_over(enemy)
+
+    check_game_clear()
